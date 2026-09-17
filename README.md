@@ -119,6 +119,11 @@ If Vite prints a different local URL, open the URL shown in the terminal.
 
 ## Sample Input and Output
 <img width="1875" height="814" alt="image" src="https://github.com/user-attachments/assets/5a355e79-89a7-4154-84cf-effdf76f3b62" />
+<img width="1890" height="844" alt="image" src="https://github.com/user-attachments/assets/2f3376f8-c27f-45bd-91e5-fbc4509fe075" />
+<img width="1900" height="863" alt="image" src="https://github.com/user-attachments/assets/5e9d0d3f-f93d-4ffd-bb0c-f84d6766bb77" />
+<img width="1887" height="849" alt="image" src="https://github.com/user-attachments/assets/646dc518-7bd5-4495-9367-46e24b280284" />
+<img width="1917" height="854" alt="image" src="https://github.com/user-attachments/assets/1b7e653f-ef9f-4489-aa83-72c94f6dd913" />
+
 
 
 ### Register User
