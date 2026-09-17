@@ -118,6 +118,8 @@ http://localhost:5173
 If Vite prints a different local URL, open the URL shown in the terminal.
 
 ## Sample Input and Output
+<img width="1875" height="814" alt="image" src="https://github.com/user-attachments/assets/5a355e79-89a7-4154-84cf-effdf76f3b62" />
+
 
 ### Register User
 
