@@ -1,0 +1,18 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: secure-exam-backend
+  config:
+    import: optional:file:.env[.properties]
+
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  first-admin-uid: ${FIRST_ADMIN_UID:}
+  key-share-wrap-secret: ${KEY_SHARE_WRAP_SECRET:}
+
+logging:
+  level:
+    com.secureexam: INFO
