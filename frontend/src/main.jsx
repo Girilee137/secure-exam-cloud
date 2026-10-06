@@ -614,6 +614,7 @@ function Questions() {
 
 function Exams({ userRole }) {
   const isController = userRole === "EXAM_CONTROLLER";
+  const isAdmin = userRole === "ADMIN";
   const [subjects, setSubjects] = useState([]);
   const [exams, setExams] = useState([]);
   const [form, setForm] = useState({ title: "", subjectId: "", description: "", scheduledStart: "", scheduledEnd: "", durationMinutes: 60, questionCount: 5 });
@@ -630,6 +631,11 @@ function Exams({ userRole }) {
   async function lock(id) {
     setError("");
     try { await api(`/exams/${id}/lock`, { method: "POST" }); await load(); } catch (e) { setError(e.message); }
+  }
+  async function deleteExam(id) {
+    setError("");
+    if (!window.confirm("Are you sure you want to permanently delete this exam? This will also remove all key shares and assignments.")) return;
+    try { await api(`/exams/${id}`, { method: "DELETE" }); await load(); } catch (e) { setError(e.message); }
   }
   return (
     <div className={isController ? "max-w-4xl space-y-4" : "grid gap-5 xl:grid-cols-[420px_1fr]"}>
@@ -650,7 +656,14 @@ function Exams({ userRole }) {
       )}
       <div>
         <h2 className="font-bold text-lg mb-3">{isController ? "Scheduled & Locked Exams" : "All Exams"}</h2>
-        <ExamList exams={exams} actionLabel={isController ? null : "Generate & Lock"} onAction={lock} />
+        {error && !isController && <p className="text-sm font-semibold text-red-700 mb-2">{error}</p>}
+        <ExamList
+          exams={exams}
+          actionLabel={isController ? null : "Generate & Lock"}
+          onAction={lock}
+          deleteLabel={isAdmin ? "Delete" : null}
+          onDelete={deleteExam}
+        />
       </div>
     </div>
   );
@@ -771,7 +784,7 @@ function Admin() {
   </div>;
 }
 
-function ExamList({ exams, actionLabel, onAction, secondaryLabel, onSecondary }) {
+function ExamList({ exams, actionLabel, onAction, secondaryLabel, onSecondary, deleteLabel, onDelete }) {
   if (!exams || exams.length === 0) {
     return <div className="panel p-4 text-center text-sm text-slate-500">No exams scheduled.</div>;
   }
@@ -785,6 +798,7 @@ function ExamList({ exams, actionLabel, onAction, secondaryLabel, onSecondary })
       <div className="flex gap-2">
         {actionLabel && <button className="btn-secondary" onClick={() => onAction(e.examId)}>{actionLabel}</button>}
         {secondaryLabel && <button className="btn-primary" onClick={() => onSecondary(e.examId)}>{secondaryLabel}</button>}
+        {deleteLabel && <button className="btn-secondary text-red-600 border-red-300 hover:bg-red-50" onClick={() => onDelete(e.examId)}><Trash2 className="h-4 w-4" />{deleteLabel}</button>}
       </div>
     </div>
   </div>)}</div>;

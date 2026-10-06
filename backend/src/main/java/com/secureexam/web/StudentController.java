@@ -30,15 +30,20 @@ public class StudentController {
 
     @GetMapping("/exams")
     Object assigned(@AuthenticationPrincipal AppUser user) throws Exception {
-        return firestore.where("examAssignments", "studentUid", user.uid()).stream()
-                .map(a -> {
-                    try {
-                        return firestore.get("exams", (String) a.get("examId"));
-                    } catch (Exception e) {
-                        return Map.of();
-                    }
+        // Collect explicitly assigned exam IDs for this student
+        java.util.Set<String> assignedIds = firestore.where("examAssignments", "studentUid", user.uid())
+                .stream()
+                .map(a -> (String) a.get("examId"))
+                .collect(java.util.stream.Collectors.toSet());
+
+        // Return all EXAM_ACTIVE exams (released/approved) plus any explicitly assigned exams
+        return firestore.all("exams").stream()
+                .filter(e -> {
+                    String status = (String) e.get("status");
+                    String examId = (String) e.get("examId");
+                    // Include if exam is active (released) OR explicitly assigned to this student
+                    return "EXAM_ACTIVE".equals(status) || assignedIds.contains(examId);
                 })
-                .filter(e -> !e.isEmpty())
                 .toList();
     }
 

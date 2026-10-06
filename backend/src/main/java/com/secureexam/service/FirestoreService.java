@@ -34,6 +34,10 @@ public class FirestoreService {
         db.collection(collection).document(id).update(data).get();
     }
 
+    public void delete(String collection, String id) throws Exception {
+        db.collection(collection).document(id).delete().get();
+    }
+
     public List<Map<String, Object>> all(String collection) throws Exception {
         return db.collection(collection).get().get().getDocuments().stream().map(s -> s.getData()).toList();
     }
