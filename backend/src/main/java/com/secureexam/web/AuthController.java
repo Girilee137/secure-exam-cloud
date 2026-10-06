@@ -1,6 +1,7 @@
 package com.secureexam.web;
 
 import com.secureexam.security.AppUser;
+import com.secureexam.service.AdminBootstrapService;
 import com.secureexam.service.FirestoreService;
 import com.secureexam.web.Requests.RegisterRequest;
 import jakarta.validation.Valid;
@@ -14,14 +15,22 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 public class AuthController {
     private final FirestoreService firestore;
+    private final AdminBootstrapService adminBootstrap;
 
-    public AuthController(FirestoreService firestore) {
+    public AuthController(FirestoreService firestore, AdminBootstrapService adminBootstrap) {
         this.firestore = firestore;
+        this.adminBootstrap = adminBootstrap;
     }
 
     @GetMapping("/me")
     AppUser me(@AuthenticationPrincipal AppUser user) {
         return user;
+    }
+
+    @PostMapping("/bootstrap-admin")
+    Map<String, Object> bootstrapAdmin() {
+        adminBootstrap.bootstrapAdmin();
+        return Map.of("status", "ok", "email", "admin@gmail.com");
     }
 
     @PostMapping("/register")

@@ -186,9 +186,12 @@ public class ExamService {
         if (Instant.now().isAfter(Instant.parse((String) exam.get("scheduledEnd")))) {
             throw new IllegalStateException("Exam window has ended");
         }
-        boolean assigned = firestore.where("examAssignments", "examId", examId).stream()
-                .anyMatch(a -> user.uid().equals(a.get("studentUid")));
-        if (!assigned && !"ADMIN".equals(user.role())) {
+        List<Map<String, Object>> assignments = firestore.where("examAssignments", "examId", examId);
+        boolean assigned = assignments.stream()
+                .anyMatch(a -> user.uid().equals(a.get("studentUid"))
+                        || (user.studentGroup() != null && !user.studentGroup().isBlank() && user.studentGroup().equalsIgnoreCase(String.valueOf(a.get("studentGroup"))))
+                        || "ALL".equalsIgnoreCase(String.valueOf(a.get("studentGroup"))));
+        if (!assignments.isEmpty() && !assigned && !"ADMIN".equals(user.role())) {
             throw new IllegalArgumentException("Student is not assigned to this exam");
         }
         List<Map<String, Object>> used = firestore.where("keyShares", "examId", examId).stream()

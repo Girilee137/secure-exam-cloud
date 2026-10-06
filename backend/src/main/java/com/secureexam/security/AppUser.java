@@ -3,7 +3,11 @@ package com.secureexam.security;
 import java.security.Principal;
 import java.util.Map;
 
-public record AppUser(String uid, String email, String phoneNumber, String displayName, String role, String status) implements Principal {
+public record AppUser(String uid, String email, String phoneNumber, String displayName, String role, String status, String studentGroup) implements Principal {
+    public AppUser(String uid, String email, String phoneNumber, String displayName, String role, String status) {
+        this(uid, email, phoneNumber, displayName, role, status, "");
+    }
+
     public static AppUser from(String uid, Map<String, Object> data) {
         return new AppUser(
                 uid,
@@ -11,7 +15,8 @@ public record AppUser(String uid, String email, String phoneNumber, String displ
                 string(data.get("phoneNumber")),
                 string(data.getOrDefault("displayName", "")),
                 string(data.get("role")),
-                string(data.get("status")));
+                string(data.get("status")),
+                string(data.getOrDefault("studentGroup", "")));
     }
 
     private static String string(Object value) {

@@ -30,19 +30,40 @@ public class StudentController {
 
     @GetMapping("/exams")
     Object assigned(@AuthenticationPrincipal AppUser user) throws Exception {
-        // Collect explicitly assigned exam IDs for this student
-        java.util.Set<String> assignedIds = firestore.where("examAssignments", "studentUid", user.uid())
-                .stream()
-                .map(a -> (String) a.get("examId"))
+        java.util.Set<String> myExamIds = new java.util.HashSet<>();
+        // 1. Direct assignments for studentUid
+        for (Map<String, Object> a : firestore.where("examAssignments", "studentUid", user.uid())) {
+            Object examId = a.get("examId");
+            if (examId != null) myExamIds.add(String.valueOf(examId));
+        }
+        // 2. Group assignments
+        String userGroup = user.studentGroup();
+        if (userGroup != null && !userGroup.isBlank()) {
+            for (Map<String, Object> a : firestore.where("examAssignments", "studentGroup", userGroup)) {
+                Object examId = a.get("examId");
+                if (examId != null) myExamIds.add(String.valueOf(examId));
+            }
+        }
+        // 3. ALL group assignments
+        for (Map<String, Object> a : firestore.where("examAssignments", "studentGroup", "ALL")) {
+            Object examId = a.get("examId");
+            if (examId != null) myExamIds.add(String.valueOf(examId));
+        }
+
+        // Exams with any assignments configured
+        java.util.List<Map<String, Object>> allAssignments = firestore.all("examAssignments");
+        java.util.Set<String> examsWithAssignments = allAssignments.stream()
+                .map(a -> String.valueOf(a.get("examId")))
                 .collect(java.util.stream.Collectors.toSet());
 
-        // Return all EXAM_ACTIVE exams (released/approved) plus any explicitly assigned exams
         return firestore.all("exams").stream()
                 .filter(e -> {
-                    String status = (String) e.get("status");
-                    String examId = (String) e.get("examId");
-                    // Include if exam is active (released) OR explicitly assigned to this student
-                    return "EXAM_ACTIVE".equals(status) || assignedIds.contains(examId);
+                    String examId = String.valueOf(e.get("examId"));
+                    if ("ADMIN".equals(user.role())) return true;
+                    if (myExamIds.contains(examId)) return true;
+                    // Fallback: If exam has no assignments at all and is active
+                    if (!examsWithAssignments.contains(examId) && "EXAM_ACTIVE".equals(e.get("status"))) return true;
+                    return false;
                 })
                 .toList();
     }

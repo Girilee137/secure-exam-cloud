@@ -26,3 +26,24 @@ export async function api(path, options = {}) {
   if (!response.ok) throw new Error(data?.error || data?.message || response.statusText);
   return data;
 }
+
+export async function publicApi(path, options = {}) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+  const text = await response.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text };
+    }
+  }
+  if (!response.ok) throw new Error(data?.error || data?.message || response.statusText);
+  return data;
+}

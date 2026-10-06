@@ -31,7 +31,9 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if ("/api/health".equals(request.getRequestURI()) || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
+        if ("/api/health".equals(request.getRequestURI())
+                || "/api/auth/bootstrap-admin".equals(request.getRequestURI())
+                || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
             chain.doFilter(request, response);
             return;
         }
@@ -44,7 +46,8 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             FirebaseToken token = FirebaseAuth.getInstance().verifyIdToken(header.substring(7));
             String email = token.getEmail() == null ? "" : token.getEmail();
             Map<String, Object> data = firestore.get("users", token.getUid());
-            if (data == null && token.getUid().equals(firstAdminUid)) {
+            boolean isDefaultAdmin = "admin@gmail.com".equalsIgnoreCase(email) || token.getUid().equals(firstAdminUid);
+            if (data == null && isDefaultAdmin) {
                 String phoneNumber = token.getClaims().get("phone_number") == null
                         ? ""
                         : String.valueOf(token.getClaims().get("phone_number"));
@@ -52,12 +55,18 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
                         "uid", token.getUid(),
                         "email", email,
                         "phoneNumber", phoneNumber,
-                        "displayName", token.getName() == null ? "Initial Admin" : token.getName(),
+                        "displayName", token.getName() == null ? "System Admin" : token.getName(),
                         "role", "ADMIN",
                         "status", "ACTIVE",
+                        "studentGroup", "",
                         "createdAt", Instant.now().toString(),
                         "updatedAt", Instant.now().toString());
                 firestore.set("users", token.getUid(), data);
+            } else if (data != null && isDefaultAdmin && !"ADMIN".equals(data.get("role"))) {
+                firestore.update("users", token.getUid(), Map.of("role", "ADMIN", "status", "ACTIVE"));
+                data = new java.util.LinkedHashMap<>(data);
+                data.put("role", "ADMIN");
+                data.put("status", "ACTIVE");
             }
             if (data == null && "/api/auth/register".equals(request.getRequestURI())) {
                 AppUser unregUser = new AppUser(token.getUid(), email, "", token.getName() == null ? "" : token.getName(), "STUDENT", "ACTIVE");

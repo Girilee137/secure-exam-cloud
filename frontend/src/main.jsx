@@ -3,8 +3,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { BookOpen, CalendarClock, CheckCircle2, ClipboardList, GraduationCap, KeyRound, Lock, LogOut, Mail, Plus, ShieldCheck, Trash2, UserCheck, Users } from "lucide-react";
-import { api } from "./api";
-import { auth, loginWithEmail, registerWithEmail } from "./firebase";
+import { api, publicApi } from "./api";
+import { auth, loginWithEmail } from "./firebase";
 import "./styles.css";
 
 const ROLE_CONFIG = {
@@ -31,11 +31,8 @@ const ROLE_CONFIG = {
 };
 
 function Auth({ onAuthSuccess }) {
-  const [mode, setMode] = useState("login"); // "login" or "register"
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [role, setRole] = useState("STUDENT");
+  const [email, setEmail] = useState("admin@gmail.com");
+  const [password, setPassword] = useState("password");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -44,35 +41,22 @@ function Auth({ onAuthSuccess }) {
     setError("");
     setLoading(true);
     try {
-      await loginWithEmail(email.trim(), password);
+      try {
+        await loginWithEmail(email.trim(), password);
+      } catch (loginErr) {
+        // If logging in as default admin and failed, try to trigger bootstrap and retry
+        if (email.trim().toLowerCase() === "admin@gmail.com") {
+          try {
+            await publicApi("/auth/bootstrap-admin", { method: "POST" });
+            await loginWithEmail(email.trim(), password);
+          } catch {
+            throw loginErr;
+          }
+        } else {
+          throw loginErr;
+        }
+      }
       const profile = await api("/auth/me");
-      onAuthSuccess?.(profile);
-    } catch (err) {
-      setError(authMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRegister(e) {
-    e?.preventDefault();
-    setError("");
-    if (!displayName.trim()) {
-      setError("Please enter your full name.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-    setLoading(true);
-    try {
-      await registerWithEmail(email.trim(), password, displayName.trim());
-      // Register role & details in backend
-      const profile = await api("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({ displayName: displayName.trim(), role })
-      });
       onAuthSuccess?.(profile);
     } catch (err) {
       setError(authMessage(err));
@@ -94,7 +78,7 @@ function Auth({ onAuthSuccess }) {
           </div>
           <div className="grid gap-3 text-sm text-slate-700">
             {[
-              ["Email & Password Auth", "Role-separated portal for Students, Teachers, Controllers & Admins."],
+              ["Role-Based Security", "Portals for Students, Teachers, Controllers & Admins."],
               ["Locked Paper", "AES-256-GCM encrypted papers stored without plaintext."],
               ["2-of-3 Release", "Teacher, controller, and admin Shamir key share authorization."]
             ].map(([title, text]) => (
@@ -106,7 +90,7 @@ function Auth({ onAuthSuccess }) {
           </div>
 
           <div className="panel p-4 bg-white/70">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Role Portals Available</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Role Portals</h3>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-800 font-semibold border border-emerald-200">🎓 Student</span>
               <span className="rounded bg-blue-50 px-2 py-1 text-blue-800 font-semibold border border-blue-200">👨‍🏫 Teacher</span>
@@ -117,151 +101,74 @@ function Auth({ onAuthSuccess }) {
         </div>
 
         <div className="panel p-6">
-          {/* Mode Switcher */}
-          <div className="flex border-b border-line mb-6">
-            <button
-              type="button"
-              className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${
-                mode === "login"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-              onClick={() => { setMode("login"); setError(""); }}
-            >
-              Sign In with Email
-            </button>
-            <button
-              type="button"
-              className={`flex-1 pb-3 text-sm font-bold border-b-2 transition-colors ${
-                mode === "register"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-              onClick={() => { setMode("register"); setError(""); }}
-            >
-              Register New Account
-            </button>
-          </div>
-
-          {mode === "login" ? (
-            <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="border-b border-line pb-4">
               <h2 className="text-xl font-bold text-ink">Sign In to Your Portal</h2>
-              <p className="text-xs text-slate-500">Access your role-specific exam dashboard.</p>
-              <label className="block space-y-1">
-                <span className="label">Email address</span>
-                <input
-                  type="email"
-                  required
-                  className="input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@university.edu"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="label">Password</span>
-                <input
-                  type="password"
-                  required
-                  className="input"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full mt-2"
-              >
-                {loading ? "Signing in..." : "Sign In"}
-              </button>
-              {error && <p className="text-sm font-semibold text-red-700 bg-red-50 p-3 rounded border border-red-200">{error}</p>}
-              <p className="text-xs text-center text-slate-500 mt-4">
-                Don't have an account?{" "}
+              <p className="text-xs text-slate-500 mt-1">
+                Enter your credentials to access your role-specific dashboard.
+              </p>
+            </div>
+
+            {/* Default Admin Notice Card */}
+            <div className="rounded-lg border border-purple-200 bg-purple-50/80 p-3.5 text-xs text-purple-900 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold flex items-center gap-1.5 text-purple-800">
+                  <ShieldCheck className="h-4 w-4 text-purple-700" /> Default System Admin
+                </span>
                 <button
                   type="button"
-                  onClick={() => { setMode("register"); setError(""); }}
-                  className="text-primary font-bold hover:underline"
+                  onClick={() => {
+                    setEmail("admin@gmail.com");
+                    setPassword("password");
+                  }}
+                  className="text-xs font-bold text-purple-700 hover:underline cursor-pointer"
                 >
-                  Register here
+                  Use Defaults
                 </button>
+              </div>
+              <p className="font-mono text-purple-800">
+                Email: <strong>admin@gmail.com</strong> &nbsp;|&nbsp; Password: <strong>password</strong>
               </p>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <h2 className="text-xl font-bold text-ink">Register New Account</h2>
-              <p className="text-xs text-slate-500">Choose your role to get separate portal access.</p>
-              <label className="block space-y-1">
-                <span className="label">Full Name</span>
-                <input
-                  type="text"
-                  required
-                  className="input"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Dr. Jane Smith or Alex Johnson"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="label">Email address</span>
-                <input
-                  type="email"
-                  required
-                  className="input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@university.edu"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="label">Password (min 6 characters)</span>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  className="input"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="label">Select Your Role / Portal</span>
-                <select
-                  className="input"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                >
-                  <option value="STUDENT">🎓 Student (Take exams & view results)</option>
-                  <option value="TEACHER">👨‍🏫 Teacher (Manage questions & lock exams)</option>
-                  <option value="EXAM_CONTROLLER">🛡️ Exam Controller (Approve & release papers)</option>
-                  <option value="ADMIN">⚙️ Administrator (Full system management)</option>
-                </select>
-              </label>
-              <p className="text-xs text-slate-500 italic">
-                {ROLE_CONFIG[role]?.description}
+              <p className="text-[11px] text-purple-600">
+                New accounts for Students, Teachers, and Controllers can only be created by an Administrator.
               </p>
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full mt-2"
-              >
-                {loading ? "Creating account..." : "Register & Enter"}
-              </button>
-              {error && <p className="text-sm font-semibold text-red-700 bg-red-50 p-3 rounded border border-red-200">{error}</p>}
-              <p className="text-xs text-center text-slate-500 mt-4">
-                Already registered?{" "}
-                <button
-                  type="button"
-                  onClick={() => { setMode("login"); setError(""); }}
-                  className="text-primary font-bold hover:underline"
-                >
-                  Sign in here
-                </button>
-              </p>
-            </form>
-          )}
+            </div>
+
+            <label className="block space-y-1">
+              <span className="label">Email address</span>
+              <input
+                type="email"
+                required
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@gmail.com"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="label">Password</span>
+              <input
+                type="password"
+                required
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full mt-2 cursor-pointer"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+            {error && <p className="text-sm font-semibold text-red-700 bg-red-50 p-3 rounded border border-red-200">{error}</p>}
+
+            <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 text-center">
+              Student, Teacher, and Exam Controller accounts are created and managed by the System Administrator in the Admin portal.
+            </div>
+          </form>
         </div>
       </section>
     </main>
@@ -749,39 +656,620 @@ function Student() {
 }
 
 function Admin() {
+  const [activeTab, setActiveTab] = useState("accounts"); // "accounts" | "assignments" | "subjects" | "audit"
   const [subjects, setSubjects] = useState([]);
   const [users, setUsers] = useState([]);
+  const [exams, setExams] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [logs, setLogs] = useState([]);
+
+  // Create User form
+  const [newUser, setNewUser] = useState({
+    displayName: "",
+    email: "",
+    password: "",
+    role: "STUDENT",
+    studentGroup: "Group A",
+    phoneNumber: ""
+  });
+
+  // Assign Exam form
+  const [assignForm, setAssignForm] = useState({
+    examId: "",
+    assignMode: "group", // "group" or "individual"
+    studentGroup: "Group A",
+    customGroup: "",
+    studentUid: ""
+  });
+
   const [subjectName, setSubjectName] = useState("");
-  const [userForm, setUserForm] = useState({ uid: "", role: "STUDENT", status: "ACTIVE", displayName: "", phoneNumber: "", email: "" });
   const [error, setError] = useState("");
-  const load = async () => { setSubjects(await api("/subjects")); setUsers(await api("/admin/users")); setLogs(await api("/admin/audit-logs")); };
-  useEffect(() => { load().catch(e => setError(e.message)); }, []);
-  async function addSubject() {
-    setError("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
     try {
-      await api("/subjects", { method: "POST", body: JSON.stringify({ name: subjectName, code: subjectName.slice(0, 6).toUpperCase() }) });
+      const [subs, us, ex, as, lg] = await Promise.all([
+        api("/subjects"),
+        api("/admin/users"),
+        api("/exams"),
+        api("/admin/assignments"),
+        api("/admin/audit-logs")
+      ]);
+      setSubjects(subs);
+      setUsers(us);
+      setExams(ex);
+      setAssignments(as);
+      setLogs(lg);
+      if (ex.length > 0 && !assignForm.examId) {
+        setAssignForm(prev => ({ ...prev, examId: ex[0].examId }));
+      }
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  // Compute available student groups
+  const existingGroups = Array.from(new Set(
+    users
+      .filter(u => u.role === "STUDENT" && u.studentGroup && u.studentGroup.trim())
+      .map(u => u.studentGroup.trim())
+  ));
+  if (!existingGroups.includes("Group A")) existingGroups.unshift("Group A");
+  if (!existingGroups.includes("Group B")) existingGroups.push("Group B");
+
+  // Create new user (Student, Teacher, Exam Controller, Admin)
+  async function handleCreateUser(e) {
+    e?.preventDefault();
+    setError("");
+    setMessage("");
+    if (!newUser.displayName.trim() || !newUser.email.trim() || !newUser.password) {
+      setError("Please fill in Name, Email, and Password.");
+      return;
+    }
+    if (newUser.password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await api("/admin/users", {
+        method: "POST",
+        body: JSON.stringify({
+          ...newUser,
+          displayName: newUser.displayName.trim(),
+          email: newUser.email.trim(),
+          studentGroup: newUser.role === "STUDENT" ? newUser.studentGroup.trim() : ""
+        })
+      });
+      setMessage(`Account created successfully for ${newUser.displayName} (${newUser.role}).`);
+      setNewUser({
+        displayName: "",
+        email: "",
+        password: "",
+        role: "STUDENT",
+        studentGroup: "Group A",
+        phoneNumber: ""
+      });
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Delete user account
+  async function handleDeleteUser(uid, displayName, email) {
+    setError("");
+    setMessage("");
+    if (email === "admin@gmail.com") {
+      setError("Cannot delete the default administrator account.");
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to permanently delete user account "${displayName || email}" (${email})?`)) {
+      return;
+    }
+    try {
+      await api(`/admin/users/${uid}`, { method: "DELETE" });
+      setMessage(`User account ${displayName || email} deleted.`);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  // Assign exam to a group of students or an individual student
+  async function handleAssignExam(e) {
+    e?.preventDefault();
+    setError("");
+    setMessage("");
+    if (!assignForm.examId) {
+      setError("Please select an exam to assign.");
+      return;
+    }
+    setLoading(true);
+    try {
+      let body = { examId: assignForm.examId };
+      if (assignForm.assignMode === "group") {
+        const group = assignForm.customGroup.trim() || assignForm.studentGroup;
+        if (!group) {
+          setError("Please select or type a student group.");
+          setLoading(false);
+          return;
+        }
+        body.studentGroup = group;
+      } else {
+        if (!assignForm.studentUid) {
+          setError("Please select a student.");
+          setLoading(false);
+          return;
+        }
+        body.studentUid = assignForm.studentUid;
+      }
+
+      const res = await api("/admin/assignments", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      if (res.assignedStudents !== undefined) {
+        setMessage(`Exam assigned to group "${res.group}" (${res.assignedStudents} student(s) enrolled).`);
+      } else {
+        setMessage("Exam assigned to student successfully.");
+      }
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Delete assignment
+  async function handleDeleteAssignment(assignmentId) {
+    setError("");
+    setMessage("");
+    if (!window.confirm("Remove this exam assignment?")) return;
+    try {
+      await api(`/admin/assignments/${assignmentId}`, { method: "DELETE" });
+      setMessage("Assignment removed.");
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  // Add subject
+  async function addSubject(e) {
+    e?.preventDefault();
+    setError("");
+    setMessage("");
+    const name = subjectName.trim();
+    if (!name) return;
+    try {
+      await api("/subjects", {
+        method: "POST",
+        body: JSON.stringify({ name, code: name.slice(0, 6).toUpperCase() })
+      });
       setSubjectName("");
+      setMessage(`Subject "${name}" added.`);
       await load();
     } catch (e) {
       setError(e.message);
     }
   }
-  async function saveUser() {
-    setError("");
-    try {
-      await api(`/admin/users/${userForm.uid}`, { method: "PUT", body: JSON.stringify(userForm) });
-      await load();
-    } catch (e) {
-      setError(e.message);
-    }
-  }
-  return <div className="grid gap-5 xl:grid-cols-2">
-    <div className="panel p-5"><h2 className="font-bold">Subjects</h2><div className="mt-3 flex gap-2"><input className="input" value={subjectName} onChange={(e) => setSubjectName(e.target.value)} /><button className="btn-primary" onClick={addSubject}>Add</button></div><div className="mt-4 grid gap-2">{subjects.map((s) => <p className="rounded border border-line px-3 py-2 text-sm" key={s.subjectId}>{s.name}</p>)}</div></div>
-    <div className="panel p-5"><h2 className="font-bold">Users</h2><div className="mt-3 grid gap-2">{["uid", "displayName", "phoneNumber", "email"].map((f) => <input className="input" key={f} placeholder={f} value={userForm[f]} onChange={(e) => setUserForm({ ...userForm, [f]: e.target.value })} />)}<select className="input" value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}><option>ADMIN</option><option>TEACHER</option><option>EXAM_CONTROLLER</option><option>STUDENT</option></select><button className="btn-primary" onClick={saveUser}>Save user</button></div><div className="mt-4 max-h-64 overflow-auto text-sm">{users.map((u) => <p className="border-b border-line py-2" key={u.uid}>{u.displayName || u.uid} · {u.role}</p>)}</div></div>
-    {error && <div className="panel border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-700 xl:col-span-2">{error}</div>}
-    <div className="panel p-5 xl:col-span-2"><h2 className="font-bold">Audit Logs</h2><div className="mt-3 max-h-96 overflow-auto text-sm">{logs.map((l) => <p className="border-b border-line py-2" key={l.logId}>{l.timestamp} · {l.actorRole} · {l.action} · {l.success ? "success" : "failed"}</p>)}</div></div>
-  </div>;
+
+  const studentUsers = users.filter(u => u.role === "STUDENT");
+
+  return (
+    <div className="space-y-6">
+      {/* Tab Navigation */}
+      <div className="flex flex-wrap gap-2 border-b border-line pb-3">
+        {[
+          ["accounts", "👥 User Accounts", "Manage Students, Teachers, Controllers"],
+          ["assignments", "📋 Exam Assignments", "Assign Exams to Student Groups"],
+          ["subjects", "📚 Subjects", "Course Catalogs"],
+          ["audit", "🛡️ Audit Logs", "System Event History"]
+        ].map(([tabKey, title]) => (
+          <button
+            key={tabKey}
+            type="button"
+            className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors cursor-pointer ${
+              activeTab === tabKey
+                ? "bg-primary text-white shadow-sm"
+                : "bg-white text-slate-700 hover:bg-slate-100 border border-line"
+            }`}
+            onClick={() => { setActiveTab(tabKey); setError(""); setMessage(""); }}
+          >
+            {title}
+          </button>
+        ))}
+      </div>
+
+      {message && <div className="panel border-accent bg-green-50 p-3 text-sm font-semibold text-green-800">{message}</div>}
+      {error && <div className="panel border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div>}
+
+      {/* Tab 1: User Accounts (Admin only can create other account called student, teacher, exam controller and delete) */}
+      {activeTab === "accounts" && (
+        <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+          <div className="panel p-5 space-y-4">
+            <div>
+              <h2 className="font-bold text-lg text-ink">Create New Account</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Admin-controlled user creation for Students, Teachers, and Exam Controllers.
+              </p>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-3">
+              <label className="block space-y-1">
+                <span className="label">Full Name</span>
+                <input
+                  type="text"
+                  required
+                  className="input"
+                  value={newUser.displayName}
+                  onChange={(e) => setNewUser({ ...newUser, displayName: e.target.value })}
+                  placeholder="e.g. Alice Smith"
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="label">Email Address</span>
+                <input
+                  type="email"
+                  required
+                  className="input"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  placeholder="student1@university.edu"
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="label">Password (min 6 characters)</span>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  className="input"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  placeholder="••••••••"
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="label">Account Role</span>
+                <select
+                  className="input font-semibold"
+                  value={newUser.role}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                >
+                  <option value="STUDENT">🎓 Student</option>
+                  <option value="TEACHER">👨‍🏫 Teacher</option>
+                  <option value="EXAM_CONTROLLER">🛡️ Exam Controller</option>
+                  <option value="ADMIN">⚙️ Administrator</option>
+                </select>
+              </label>
+
+              {newUser.role === "STUDENT" && (
+                <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                  <label className="block space-y-1">
+                    <span className="label text-emerald-900 font-bold">Student Group / Batch</span>
+                    <input
+                      type="text"
+                      className="input bg-white"
+                      value={newUser.studentGroup}
+                      onChange={(e) => setNewUser({ ...newUser, studentGroup: e.target.value })}
+                      placeholder="e.g. Group A, Batch 2026, Section 1"
+                    />
+                  </label>
+                  <p className="text-[11px] text-emerald-800">
+                    Group assignments will automatically enroll this student when exams are assigned to this group.
+                  </p>
+                </div>
+              )}
+
+              <label className="block space-y-1">
+                <span className="label">Phone Number (Optional)</span>
+                <input
+                  type="tel"
+                  className="input"
+                  value={newUser.phoneNumber}
+                  onChange={(e) => setNewUser({ ...newUser, phoneNumber: e.target.value })}
+                  placeholder="+1 (555) 000-0000"
+                />
+              </label>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full mt-2 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                {loading ? "Creating..." : "Create Account"}
+              </button>
+            </form>
+          </div>
+
+          {/* User List with Delete capability */}
+          <div className="panel p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-lg text-ink">Registered Accounts ({users.length})</h2>
+                <p className="text-xs text-slate-500">View and manage all system users.</p>
+              </div>
+              <span className="text-xs font-semibold px-2 py-1 bg-slate-100 rounded text-slate-600">
+                {studentUsers.length} Students
+              </span>
+            </div>
+
+            <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+              {users.map((u) => {
+                const roleMeta = ROLE_CONFIG[u.role] || ROLE_CONFIG.STUDENT;
+                const isDefaultAdmin = u.email === "admin@gmail.com";
+                return (
+                  <div
+                    key={u.uid}
+                    className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-line bg-white hover:border-slate-300 transition-colors"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-ink font-semibold">{u.displayName || "No Name"}</strong>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${roleMeta.badge}`}>
+                          {roleMeta.label}
+                        </span>
+                        {u.studentGroup && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                            🏷️ {u.studentGroup}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 font-mono">{u.email || u.uid}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isDefaultAdmin ? (
+                        <span className="text-xs font-semibold text-slate-400 italic px-2 py-1">Protected Admin</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUser(u.uid, u.displayName, u.email)}
+                          className="btn-secondary text-red-600 border-red-200 hover:bg-red-50 text-xs px-2.5 py-1.5 flex items-center gap-1 cursor-pointer"
+                          title="Permanently delete this account"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Exam Assignments (Assign exam to particular group of students or student) */}
+      {activeTab === "assignments" && (
+        <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+          <div className="panel p-5 space-y-4">
+            <div>
+              <h2 className="font-bold text-lg text-ink">Assign Exam</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Assign scheduled exams to a specific group of students or an individual student.
+              </p>
+            </div>
+
+            <form onSubmit={handleAssignExam} className="space-y-4">
+              <label className="block space-y-1">
+                <span className="label">Select Exam</span>
+                <select
+                  className="input font-semibold"
+                  value={assignForm.examId}
+                  onChange={(e) => setAssignForm({ ...assignForm, examId: e.target.value })}
+                >
+                  <option value="">-- Choose Exam --</option>
+                  {exams.map((ex) => (
+                    <option key={ex.examId} value={ex.examId}>
+                      {ex.title} ({ex.status}) - {new Date(ex.scheduledStart).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="space-y-2">
+                <span className="label">Assignment Type</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className={`py-2 px-3 text-xs font-bold rounded-lg border cursor-pointer ${
+                      assignForm.assignMode === "group"
+                        ? "bg-primary text-white border-primary"
+                        : "bg-white text-slate-700 border-line hover:bg-slate-50"
+                    }`}
+                    onClick={() => setAssignForm({ ...assignForm, assignMode: "group" })}
+                  >
+                    👥 Assign to Group
+                  </button>
+                  <button
+                    type="button"
+                    className={`py-2 px-3 text-xs font-bold rounded-lg border cursor-pointer ${
+                      assignForm.assignMode === "individual"
+                        ? "bg-primary text-white border-primary"
+                        : "bg-white text-slate-700 border-line hover:bg-slate-50"
+                    }`}
+                    onClick={() => setAssignForm({ ...assignForm, assignMode: "individual" })}
+                  >
+                    👤 Single Student
+                  </button>
+                </div>
+              </div>
+
+              {assignForm.assignMode === "group" ? (
+                <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+                  <label className="block space-y-1">
+                    <span className="label font-bold text-blue-900">Choose Student Group</span>
+                    <select
+                      className="input bg-white font-semibold"
+                      value={assignForm.studentGroup}
+                      onChange={(e) => setAssignForm({ ...assignForm, studentGroup: e.target.value, customGroup: "" })}
+                    >
+                      <option value="ALL">🌟 ALL (All registered students)</option>
+                      {existingGroups.map((g) => (
+                        <option key={g} value={g}>🏷️ {g}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="label text-xs text-blue-800">Or type custom group name:</span>
+                    <input
+                      type="text"
+                      className="input bg-white"
+                      value={assignForm.customGroup}
+                      onChange={(e) => setAssignForm({ ...assignForm, customGroup: e.target.value })}
+                      placeholder="e.g. Group C, Section B"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                  <label className="block space-y-1">
+                    <span className="label font-bold text-emerald-900">Select Student</span>
+                    <select
+                      className="input bg-white font-semibold"
+                      value={assignForm.studentUid}
+                      onChange={(e) => setAssignForm({ ...assignForm, studentUid: e.target.value })}
+                    >
+                      <option value="">-- Choose Student --</option>
+                      {studentUsers.map((s) => (
+                        <option key={s.uid} value={s.uid}>
+                          {s.displayName || s.email} {s.studentGroup ? `[${s.studentGroup}]` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || exams.length === 0}
+                className="btn-primary w-full mt-2 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                {loading ? "Assigning..." : "Assign Exam"}
+              </button>
+            </form>
+          </div>
+
+          {/* Current Assignments List */}
+          <div className="panel p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-lg text-ink">Active Assignments ({assignments.length})</h2>
+                <p className="text-xs text-slate-500">Exams assigned to students and groups.</p>
+              </div>
+            </div>
+
+            {assignments.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-500 border border-dashed rounded-lg">
+                No assignments created yet. Assign an exam above to a student group or individual student.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+                {assignments.map((a) => (
+                  <div
+                    key={a.assignmentId}
+                    className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-line bg-white hover:border-slate-300 transition-colors"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-ink font-semibold">{a.examTitle || a.examId}</strong>
+                        {a.studentGroup && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                            👥 Group: {a.studentGroup}
+                          </span>
+                        )}
+                        {a.studentUid && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            👤 {a.studentName || "Student"}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        Assigned on {a.assignedAt ? new Date(a.assignedAt).toLocaleString() : "N/A"}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteAssignment(a.assignmentId)}
+                      className="btn-secondary text-red-600 border-red-200 hover:bg-red-50 text-xs px-2.5 py-1.5 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Subjects */}
+      {activeTab === "subjects" && (
+        <div className="panel p-5 space-y-4 max-w-2xl">
+          <h2 className="font-bold text-lg text-ink">Manage Subjects</h2>
+          <form onSubmit={addSubject} className="flex gap-2">
+            <input
+              className="input flex-1"
+              value={subjectName}
+              onChange={(e) => setSubjectName(e.target.value)}
+              placeholder="New subject name (e.g. Mathematics, Cloud Computing)"
+            />
+            <button type="submit" className="btn-primary cursor-pointer">
+              Add Subject
+            </button>
+          </form>
+          <div className="grid gap-2 pt-2">
+            {subjects.map((s) => (
+              <div key={s.subjectId} className="flex items-center justify-between p-3 rounded border border-line bg-white">
+                <span className="font-semibold text-sm">{s.name}</span>
+                <span className="text-xs font-mono text-slate-400">{s.code}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Audit Logs */}
+      {activeTab === "audit" && (
+        <div className="panel p-5 space-y-4">
+          <h2 className="font-bold text-lg text-ink">Security Audit Logs ({logs.length})</h2>
+          <div className="space-y-1.5 max-h-[600px] overflow-y-auto font-mono text-xs">
+            {logs.map((l) => (
+              <div key={l.logId} className="flex items-center justify-between p-2.5 rounded border-b border-line hover:bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">{l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : ""}</span>
+                  <span className="font-bold text-slate-700">[{l.actorRole || "SYSTEM"}]</span>
+                  <span className="text-primary font-semibold">{l.action}</span>
+                </div>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${l.success ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                  {l.success ? "SUCCESS" : "FAILED"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ExamList({ exams, actionLabel, onAction, secondaryLabel, onSecondary, deleteLabel, onDelete }) {

@@ -34,9 +34,21 @@ public final class Requests {
             @NotBlank @Pattern(regexp = "ACTIVE|INACTIVE", message = "Invalid status") String status,
             String displayName,
             String phoneNumber,
-            String email) {}
+            String email,
+            String studentGroup) {}
 
-    public record AssignmentRequest(@NotBlank String examId, @NotBlank String studentUid) {}
+    public record CreateUserRequest(
+            @NotBlank @Email String email,
+            @NotBlank @Size(min = 6, message = "Password must be at least 6 characters") String password,
+            @NotBlank String displayName,
+            @NotBlank @Pattern(regexp = "ADMIN|TEACHER|EXAM_CONTROLLER|STUDENT", message = "Invalid role") String role,
+            String studentGroup,
+            String phoneNumber) {}
+
+    public record AssignmentRequest(
+            @NotBlank String examId,
+            String studentUid,
+            String studentGroup) {}
 
     public record SubmissionRequest(@NotBlank String examId, @NotNull Map<String, Integer> answers) {}
  
